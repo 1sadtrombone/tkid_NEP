@@ -108,8 +108,20 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
         elif np.abs(freq_mask[i] - reso2)<1:
             B = samples[i]
 
-    DIFF = A*rsponsivity1 - B*responsivity2
-    SUM = A*rsponsivity1 + B*responsivity2
+    diffs = []
+    eps = np.linspace(0,1, 200)
+    for epsilon in eps:
+        DIFF = A*responsivity1 - B*responsivity2 * epsilon
+        SUM = A*responsivity1 + B*responsivity2 * epsilon
+        DIFF = signal.decimate(DIFF, 100, ftype='fir')
+        diffs.append(np.std(DIFF))
+
+    epsilon = eps[np.argmin(diffs)]
+    print(responsivity1,responsivity2 * epsilon)
+    #DIFF = A*responsivity1 - B*responsivity2 * epsilon
+    #SUM = A*responsivity1 + B*responsivity2 * epsilon
+    DIFF = A*responsivity1
+    SUM = B*responsivity2 
 
     Frequencies, DSpec = signal.welch(DIFF, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
     Frequencies, SSpec = signal.welch(SUM, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
@@ -309,9 +321,9 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     df_std_B = np.std(B_d[B_d > 0]) - np.std(B_d[B_d < 0])
 
     resp_A = dP/df_A
-    resp_A_std = dP/dp_std_A
+    resp_A_std = dP/df_std_A
     resp_B = dP/df_B
-    resp_A_std = dP/dp_std_B
+    resp_B_std = dP/df_std_B
     
     print("Plotting...")
     fig = plotly.subplots.make_subplots(
@@ -393,6 +405,8 @@ if __name__ == "__main__":
         plot_filename = "Calib_TKIDs_"+save_name_calib+"_%.1fpW"%(args.optical_power),
         cryocard_trace = h_calib
     )
+
+    save_name = "first"
 
     plot_NEP(
         samples = d_noise,
