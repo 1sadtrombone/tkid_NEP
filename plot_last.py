@@ -108,8 +108,8 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
         elif np.abs(freq_mask[i] - reso2)<1:
             B = samples[i]
 
-    DIFF = (A - B) *  responsivity
-    SUM = (A + B) *  responsivity
+    DIFF = A*rsponsivity1 - B*responsivity2
+    SUM = A*rsponsivity1 + B*responsivity2
 
     Frequencies, DSpec = signal.welch(DIFF, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
     Frequencies, SSpec = signal.welch(SUM, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
@@ -201,8 +201,9 @@ def spec_from_samples(samples, freq_mask, sampling_rate=1, welch=None, auto_open
     return Frequencies, Spec
 
 def read_file(filename_full):
+    print(filename_full)
     with contextlib.redirect_stdout(open(os.devnull, 'w')):
-        t,d,m,h = S.read_stream_data("%s" % (filename_full),return_header=True)
+        t,d,m,h = S.read_stream_data(filename_full,return_header=True)
     return [t,d,m,h]
 
 
@@ -221,11 +222,12 @@ def get_data(filename):
         S = pysmurf.client.SmurfControl(offline=True)
         idxs=range(1,Nfiles+1)
         print(Nfiles)
-        filenmes_full = ["%s.%d" % (filename,ii) for ii in idxs]
+        filenames_full = ["%s.%d" % (filename, ii) for ii in idxs]
+        print(filenames_full)
         with Pool(4) as p:
-            m_list = p.map(read_file, [row for row in filenmes_full])
+            m_list = p.map(read_file, [row for row in filenames_full])
 
-        print(filenmes_full)
+        print(filenames_full)
         t=np.concatenate([m_list[ii][0] for ii in range(len(m_list))])
         d=np.concatenate([m_list[ii][1] for ii in range(len(m_list))],axis=1)
         m=np.concatenate([m_list[ii][2] for ii in range(len(m_list))],axis=1)
@@ -251,7 +253,7 @@ def get_data(filename):
 
     return t*1e-9,d,m,h,freq_mask
 
-def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename, cryocard_trace = None, auto_open = False):
+def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename, dP, cryocard_trace = None, auto_open = False):
     '''
     Calculate the responsivity per each channel, returns responsivity1,responsivity2.
     Also plots the calibration measurement.
@@ -278,7 +280,6 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     A_f = np.convolve(A, np.ones(order)/order, mode='valid')
     B_f = np.convolve(B, np.ones(order)/order, mode='valid')
 
-
     #clipping
     clipping = 0
     clipping_end = len(A_f)
@@ -295,7 +296,23 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     # Apply correction
     A = A - A_f
     B = B - B_f
+    
+    # decimate to reduce noise, allowing us to treat the up and down as two separate distributions
+    A_d = signal.decimate(A, 10, ftype='fir')
+    B_d = signal.decimate(B, 10, ftype='fir')
+    t_d = signal.decimate(time_ax, 10, ftype='fir')
 
+    df_A = np.mean(A_d[A_d > 0]) - np.mean(A_d[A_d < 0])
+    df_B = np.mean(B_d[B_d > 0]) - np.mean(B_d[B_d < 0])
+
+    df_std_A = np.std(A_d[A_d > 0]) - np.std(A_d[A_d < 0])
+    df_std_B = np.std(B_d[B_d > 0]) - np.std(B_d[B_d < 0])
+
+    resp_A = dP/df_A
+    resp_A_std = dP/dp_std_A
+    resp_B = dP/df_B
+    resp_A_std = dP/dp_std_B
+    
     print("Plotting...")
     fig = plotly.subplots.make_subplots(
         rows=1, cols=1,
@@ -306,36 +323,19 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     fig['layout']['yaxis1'].update(title='Df [Hz]')
     fig['layout']['xaxis1'].update(title='Time [s]')
     fig.add_trace(go.Scatter(
-                    x=time_ax,
-                    y=A ,
-                    name = "Ch %.1f MHz" % (A_freq),
+                    x=np.arange(len(A_d)),
+                    y=A_d ,
+
+                    name = "resampled Ch %.1f MHz<br>Resoponsivity: %.1f" % (A_freq, df_A),
                     # showlegend=True,
                     line={'color':'black'},
                     mode='lines',
 
                 ), secondary_y=False)
     fig.add_trace(go.Scatter(
-                    x=time_ax,
-                    y=A_f ,
-                    name = "resampled Ch %.1f MHz" % (A_freq),
-                    # showlegend=True,
-                    line={'color':'black'},
-                    mode='lines',
-
-                ), secondary_y=False)
-    fig.add_trace(go.Scatter(
-                    x=time_ax,
-                    y=B ,
-                    name = "Ch %.1f MHz" % (B_freq),
-                    # showlegend=True,
-                    line={'color':'red'},
-                    mode='lines',
-
-                ), secondary_y=False)
-    fig.add_trace(go.Scatter(
-                    x=time_ax,
-                    y=B_f ,
-                    name = "resampled Ch %.1f MHz" % (B_freq),
+                    x=np.arange(len(B_d)),
+                    y=B_d ,
+                    name = "resampled Ch %.1f MHz<br>Resoponsivity: %.1f" % (B_freq, df_B),
                     # showlegend=True,
                     line={'color':'red'},
                     mode='lines',
@@ -357,7 +357,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     plotly_png(fig, "plot/"+plot_filename+".png")
     plotly.offline.plot(fig, filename="plot/"+plot_filename+".html", auto_open=auto_open)
 
-    return 0,0
+    return resp_A, resp_A_std, resp_B, resp_B_std
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -381,18 +381,18 @@ if __name__ == "__main__":
     save_name_calib = os.path.basename(args.calibration_filename)[:-4]
 
     t_calib,d_calib,m_calib,h_calib,freq_mask_calib = get_data(args.calibration_filename)
-    # t_noise,d_noise,m_noise,h_noise,freq_mask_noise = get_data(args.noise_filename)
+    t_noise,d_noise,m_noise,h_noise,freq_mask_noise = get_data(args.noise_filename)
 
-    responsivity1, responsivity2 = calculate_responsivity(
+    responsivity1, responsivity2_std, responsivity2, responsivity2_std = calculate_responsivity(
         time_ax = t_calib,
         data = d_calib,
         reso1 = args.reso1,
         reso2 = args.reso2,
+        dP = 3000,
         freq_mask = freq_mask_calib,
         plot_filename = "Calib_TKIDs_"+save_name_calib+"_%.1fpW"%(args.optical_power),
         cryocard_trace = h_calib
     )
-    exit()
 
     plot_NEP(
         samples = d_noise,
