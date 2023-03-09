@@ -273,20 +273,28 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     # B_d = signal.decimate(B, int(resampling_factor), ftype = 'fir')
     # print(np.shape(time_ax))
     # time_ax_d = time_ax[::resampling_factor]# np.arange(len(A_d))#signal.decimate(time_ax, int(resampling_factor), ftype = 'fir')
-    order = 1000
+    order = 20000
 
     A_f = np.convolve(A, np.ones(order)/order, mode='valid')
     B_f = np.convolve(B, np.ones(order)/order, mode='valid')
 
 
     #clipping
-    clipping = 2
-    B = B[clipping:-clipping]
-    B_f = B_f[clipping:-clipping]
-    A_f = A_f [clipping:-clipping]
-    A = A[clipping:-clipping]
-    time_ax = time_ax[clipping:-clipping]
-    cryocard_trace = cryocard_trace[clipping:-clipping]
+    clipping = 0
+    clipping_end = len(A_f)
+    # B = B[clipping:-clipping]
+    # B_f = B_f[clipping:-clipping]
+    # A_f = A_f [clipping:-clipping]
+    # A = A[clipping:-clipping]
+    time_ax = time_ax[clipping:clipping_end]
+    cryocard_trace = cryocard_trace[clipping:clipping_end]
+    A = A[clipping:clipping_end]
+    B = B [clipping:clipping_end]
+
+
+    # Apply correction
+    A = A - A_f
+    B = B - B_f
 
     print("Plotting...")
     fig = plotly.subplots.make_subplots(
