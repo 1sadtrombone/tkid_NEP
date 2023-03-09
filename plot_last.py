@@ -266,31 +266,27 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
             B_freq = freq_mask[i]
 
     # remove fluctuations
-    resampling_factor = len(A)/1000
-    # A_f = signal.resample(signal.decimate(A, int(resampling_factor), ftype = 'fir'),len(A))
-    # B_f = signal.resample(signal.decimate(B, int(resampling_factor), ftype = 'fir'),len(B))
-    A_d = signal.decimate(A, int(resampling_factor), ftype = 'fir')
-    B_d = signal.decimate(B, int(resampling_factor), ftype = 'fir')
-    time_ax_d = signal.decimate(time_ax, int(resampling_factor), ftype = 'fir')
+    # resampling_factor = int(len(A)/500)
+    # # A_f = signal.resample(signal.decimate(A, int(resampling_factor), ftype = 'fir'),len(A))
+    # # B_f = signal.resample(signal.decimate(B, int(resampling_factor), ftype = 'fir'),len(B))
+    # A_d = signal.decimate(A, int(resampling_factor), ftype = 'fir')
+    # B_d = signal.decimate(B, int(resampling_factor), ftype = 'fir')
+    # print(np.shape(time_ax))
+    # time_ax_d = time_ax[::resampling_factor]# np.arange(len(A_d))#signal.decimate(time_ax, int(resampling_factor), ftype = 'fir')
+    order = 1000
 
-    A_coeff = np.polyfit(time_ax_d, A_d, 5, rcond=None, full=False, w=None, cov=False)
-    p_A = np.poly1d(A_coeff)
-    A_f = p_A(time_ax)
+    A_f = np.convolve(A, np.ones(order)/order, mode='valid')
+    B_f = np.convolve(B, np.ones(order)/order, mode='valid')
 
-    B_coeff = np.polyfit(time_ax_d, B_d, 5, rcond=None, full=False, w=None, cov=False)
-    p_B = np.poly1d(B_coeff)
-    B_f = p_B(time_ax)
 
     #clipping
-    clipping = 100
+    clipping = 2
     B = B[clipping:-clipping]
     B_f = B_f[clipping:-clipping]
-    A_d = A_d[clipping:-clipping]
-    B_d = B_d[clipping:-clipping]
-    time_ax_d = time_ax_d[clipping:-clipping]
     A_f = A_f [clipping:-clipping]
     A = A[clipping:-clipping]
     time_ax = time_ax[clipping:-clipping]
+    cryocard_trace = cryocard_trace[clipping:-clipping]
 
     print("Plotting...")
     fig = plotly.subplots.make_subplots(
@@ -302,8 +298,8 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     fig['layout']['yaxis1'].update(title='Df [Hz]')
     fig['layout']['xaxis1'].update(title='Time [s]')
     fig.add_trace(go.Scatter(
-                    x=time_ax_d,
-                    y=A_d ,
+                    x=time_ax,
+                    y=A ,
                     name = "Ch %.1f MHz" % (A_freq),
                     # showlegend=True,
                     line={'color':'black'},
@@ -319,28 +315,28 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
                     mode='lines',
 
                 ), secondary_y=False)
-    # fig.add_trace(go.Scatter(
-    #                 x=time_ax,
-    #                 y=B ,
-    #                 name = "Ch %.1f MHz" % (B_freq),
-    #                 # showlegend=True,
-    #                 line={'color':'red'},
-    #                 mode='lines',
-    #
-    #             ), secondary_y=False)
-    # fig.add_trace(go.Scatter(
-    #                 x=time_ax[clipping:-clipping],
-    #                 y=B_f ,
-    #                 name = "resampled Ch %.1f MHz" % (B_freq),
-    #                 # showlegend=True,
-    #                 line={'color':'red'},
-    #                 mode='lines',
-    #
-    #             ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+                    x=time_ax,
+                    y=B ,
+                    name = "Ch %.1f MHz" % (B_freq),
+                    # showlegend=True,
+                    line={'color':'red'},
+                    mode='lines',
+
+                ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+                    x=time_ax,
+                    y=B_f ,
+                    name = "resampled Ch %.1f MHz" % (B_freq),
+                    # showlegend=True,
+                    line={'color':'red'},
+                    mode='lines',
+
+                ), secondary_y=False)
     if cryocard_trace is not None:
         fig.add_trace(go.Scatter(
-                        x=time_ax[clipping:-clipping],
-                        y=cryocard_trace[clipping:-clipping],
+                        x=time_ax,
+                        y=cryocard_trace,
                         name = "Cryocard trace",
                         # showlegend=True,
                         visible = 'legendonly',
