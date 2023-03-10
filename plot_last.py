@@ -108,7 +108,6 @@ def load_calib(filename):
 
     return freq_mask, s2hz
 
-
 def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sampling_rate=1, welch=None, auto_open = False, filename = "SMuRF NEP SLAC"):
     '''
     Calculate pairdiff and pairsum specs, apply responsivity, plot the results
@@ -137,6 +136,7 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
 
     diffs = []
     eps = np.linspace(0,1, 200)
+    """
     for epsilon in eps:
         DIFF = A*responsivity1 - B*responsivity2 * epsilon
         SUM = A*responsivity1 + B*responsivity2 * epsilon
@@ -144,7 +144,16 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
         diffs.append(np.std(DIFF))
 
     epsilon = eps[np.argmin(diffs)]
-    print(responsivity1,responsivity2 * epsilon)
+    """
+
+    rms_A = np.sqrt(np.mean(A**2))
+    rms_B = np.sqrt(np.mean(B**2))
+
+    resp_avg = (responsivity1 + responsivity2)/2
+
+    responsivity1 = resp_avg * rms_A
+    responsivity2 = resp_avg * rms_B
+    
     #DIFF = A*responsivity1 - B*responsivity2 * epsilon
     #SUM = A*responsivity1 + B*responsivity2 * epsilon
     DIFF = A*responsivity1
