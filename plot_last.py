@@ -11,6 +11,7 @@ import plotly
 from plotly import  subplots
 from multiprocessing import Pool
 import contextlib
+import json
 
 freq_scaling = 95167.68567947495
 
@@ -160,7 +161,6 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
     plotly_png(fig, plot_filename+".png")
     plotly.offline.plot(fig, filename=plot_filename+".html", auto_open=auto_open)
     return Frequencies, SSpec, DSpec
-
 
 def spec_from_samples(samples, freq_mask, sampling_rate=1, welch=None, auto_open = False):
     '''
@@ -371,6 +371,10 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
 
     return resp_A, resp_A_std, resp_B, resp_B_std
 
+def read_log(log_fname):
+    logdata = json.load(log_fname)
+    print(logdata)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description='Given a calibration file and a noise measurement, calculates the responsivity and generate pairdiff/sum NEP spec plot'
@@ -378,10 +382,12 @@ if __name__ == "__main__":
 
     parser.add_argument('--calibration_filename', '-cf', help='Calibration measurement path', type=str)
     parser.add_argument('--noise_filename', '-nf', help='Noise measurement path', type=str)
+    parser.add_argument('--log_filename', '-lf', help='Log file that points to run information', type=str)
     parser.add_argument('--reso1', '-r1', help='approximate frequency in MHz of the first biased resonator', type=float, default = 259)
     parser.add_argument('--reso2', '-r2', help='approximate frequency in MHz of the second biased resonator', type=float, default = 251)
     parser.add_argument('--sampling_rate', '-rate', help='Data acquisition rate', type=float, default = 500)
     parser.add_argument('--optical_power', '-power', help='Optical power used', type=float)
+    parser.add_argument('--wave_power', '-wp', help='Peak to peak square wave power used in aW', type=float)
 
     args = parser.parse_args()
 
@@ -390,10 +396,23 @@ if __name__ == "__main__":
         exit()
 
     S = pysmurf.client.SmurfControl(offline=True)
-    save_name_calib = os.path.basename(args.calibration_filename)[:-4]
+    
 
-    t_calib,d_calib,m_calib,h_calib,freq_mask_calib = get_data(args.calibration_filename)
-    t_noise,d_noise,m_noise,h_noise,freq_mask_noise = get_data(args.noise_filename)
+    if args.log_filename:
+        with open(args.log_filename, 'r') as f:
+            logdata = json.load(f)
+        calibration_filename = logdata['calibration path']
+        noise_filename = logdata['NEP data path']
+        optical_power = logdata['base_op_pW']
+        wave_power = logdata['wave_op_pW']*1000 # want aW. This is peak to peak.
+    else:
+        calibration_filename = args.calibration_filename
+        noise_filename = args.noise_filename
+        optical_power = args.optical_power
+        wave_power = args.wave_power
+
+    t_calib,d_calib,m_calib,h_calib,freq_mask_calib = get_data(calibration_filename)
+    t_noise,d_noise,m_noise,h_noise,freq_mask_noise = get_data(noise_filename)
 
     responsivity1, responsivity2_std, responsivity2, responsivity2_std = calculate_responsivity(
         time_ax = t_calib,
