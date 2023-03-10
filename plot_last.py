@@ -46,9 +46,35 @@ def plot_buffer(time, data, header, freq_mask, plot_filename, auto_open = False,
         hh = cryocard_trace
     print("Plotting...")
     for ch in range(len(data)):
+        if np.abs(freq_mask[ch] - 259)<1:
+            A = data[ch]
+        elif np.abs(freq_mask[ch] - 251)<1:
+            B = data[ch]
+    DIFF = A-B
+    SUM = A + B
+    fig.add_trace(go.Scatter(
+                    x=xx[20:-20],
+                    y=DIFF[20:-20] ,
+                    name = "diff" ,
+                    # showlegend=True,
+                    # line={'color':'black'},
+                    mode='lines',
+
+                ), secondary_y=False)
+    fig.add_trace(go.Scatter(
+                    x=xx[20:-20],
+                    y=SUM[20:-20] ,
+                    name = "sum",
+                    # showlegend=True,
+                    # line={'color':'black'},
+                    mode='lines',
+
+                ), secondary_y=False)
+
+    for ch in range(len(data)):
         fig.add_trace(go.Scatter(
                         x=xx[20:-20],
-                        y=(yy[ch] -yy[ch][0])[20:-20] ,
+                        y=(yy[ch] - np.mean(yy[ch]))[20:-20] ,
                         name = "Ch %.1f MHz" % (freq_mask[ch]),
                         # showlegend=True,
                         # line={'color':'black'},
@@ -66,9 +92,9 @@ def plot_buffer(time, data, header, freq_mask, plot_filename, auto_open = False,
 
                     ),  secondary_y=True)
     # save to file
-    fig['layout'].update(title="Plot of %s" % filename)
-    plotly_png(fig, plot_filename+".png")
-    plotly.offline.plot(fig, filename=plot_filename+".html", auto_open=auto_open)
+    fig['layout'].update(title="Plot of %s" % plot_filename)
+    plotly_png(fig, "plot/"+plot_filename+".png")
+    plotly.offline.plot(fig, filename="plot/"+plot_filename+".html", auto_open=auto_open)
 
 def load_calib(filename):
     ctime = filename[:-4]+"_freq.txt"
@@ -156,7 +182,7 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
 
     # save to file
 
-    plot_filename = "plot/NEP_spec"
+    plot_filename = "plot/"+filename#"plot/NEP_spec"
     fig['layout'].update(title="Plot of %s" % filename)
     plotly_png(fig, plot_filename+".png")
     plotly.offline.plot(fig, filename=plot_filename+".html", auto_open=auto_open)
@@ -204,7 +230,7 @@ def spec_from_samples(samples, freq_mask, sampling_rate=1, welch=None, auto_open
                     ), 1, 1)
 
     # save to file
-    filename = "test"
+    filename = "TKIDs calibration"
     plot_filename = "plot/test_spec"
     fig['layout'].update(title="Plot of %s" % filename)
     plotly_png(fig, plot_filename+".png")
@@ -263,6 +289,7 @@ def get_data(filename):
 
     d*=s2hz
 
+
     return t*1e-9,d,m,h,freq_mask
 
 def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename, dP, cryocard_trace = None, auto_open = False):
@@ -300,6 +327,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     # A_f = A_f [clipping:-clipping]
     # A = A[clipping:-clipping]
     time_ax = time_ax[clipping:clipping_end]
+    time_ax = time_ax - time_ax[0]
     cryocard_trace = cryocard_trace[clipping:clipping_end]
     A = A[clipping:clipping_end]
     B = B [clipping:clipping_end]
@@ -314,14 +342,17 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     # decimate to reduce noise, allowing us to treat the up and down as two separate distributions
     A_d = signal.decimate(A, 10, ftype='fir')
     B_d = signal.decimate(B, 10, ftype='fir')
-    t_d = signal.decimate(time_ax, 10, ftype='fir')
-
+    t_d = time_ax[::10]#signal.decimate(time_ax, 10, ftype='fir')
+    A_d = A_d[20:-20]
+    B_d = B_d[20:-20]
+    t_d = t_d[20:-20]
+    cryocard_trace = cryocard_trace[20:-20]
     df_A = np.mean(A_d[A_d > 0]) - np.mean(A_d[A_d < 0])
     df_B = np.mean(B_d[B_d > 0]) - np.mean(B_d[B_d < 0])
 
     df_std_A = np.std(A_d[A_d > 0]) - np.std(A_d[A_d < 0])
     df_std_B = np.std(B_d[B_d > 0]) - np.std(B_d[B_d < 0])
-
+    print(df_A,dP)
     resp_A = dP/df_A
     resp_A_std = dP/df_std_A
     resp_B = dP/df_B
@@ -337,7 +368,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     fig['layout']['yaxis1'].update(title='Df [Hz]')
     fig['layout']['xaxis1'].update(title='Time [s]')
     fig.add_trace(go.Scatter(
-                    x=np.arange(len(A_d)),
+                    x=t_d,
                     y=A_d ,
 
                     name = "resampled Ch %.1f MHz<br>Resoponsivity: %.1f" % (A_freq, df_A),
@@ -347,7 +378,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
 
                 ), secondary_y=False)
     fig.add_trace(go.Scatter(
-                    x=np.arange(len(B_d)),
+                    x=t_d,
                     y=B_d ,
                     name = "resampled Ch %.1f MHz<br>Resoponsivity: %.1f" % (B_freq, df_B),
                     # showlegend=True,
@@ -394,7 +425,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     S = pysmurf.client.SmurfControl(offline=True)
-    save_name = "first"
+    save_name = "SLAC_MAR2023"
 
     if args.log_filename or not args.calibration_filename:
         if not args.log_filename:
@@ -402,11 +433,11 @@ if __name__ == "__main__":
             log_fname = max(list_of_files, key=os.path.getctime)
             print(f"Found latest log file at: {log_fname}")
         else:
-            log_fname = args.log_filename    
+            log_fname = args.log_filename
         with open(log_fname, 'r') as f:
             logdata = json.load(f)
-        calibration_filename = "/mnt"+logdata['calibration path'][4:]
-        noise_filename = "/mnt"+logdata['NEP data path'][4:]
+        calibration_filename = "/mnt/smurf-srv24"+logdata['calibration path'][5:]
+        noise_filename = "/mnt/smurf-srv24"+logdata['NEP data path'][5:]
         optical_power = logdata['base_op_pW']
         wave_power = float(logdata['wave_op_pW'])*1000 # want aW. This is peak to peak.
     else:
@@ -424,13 +455,22 @@ if __name__ == "__main__":
         data = d_calib,
         reso1 = args.reso1,
         reso2 = args.reso2,
-        dP = wave_power,
+        dP = 5000,#wave_power*1e3,
         freq_mask = freq_mask_calib,
         plot_filename = "Calib_TKIDs_"+save_name+"_%spW"%(optical_power),
         cryocard_trace = h_calib
     )
 
-
+    plot_buffer(
+        time = t_noise,
+        data = d_noise,
+        header =h_noise,
+        freq_mask = freq_mask_noise,
+        plot_filename = "Timestreams_TKIDs_"+save_name+"_%spW"%(optical_power),
+        auto_open = False,
+        cryocard_trace = h_noise,
+        decimation = 10
+    )
 
     plot_NEP(
         samples = d_noise,
@@ -440,7 +480,7 @@ if __name__ == "__main__":
         reso1 = args.reso1,
         reso2 = args.reso2,
         sampling_rate=args.sampling_rate,
-        welch=10,
+        welch=20,
         auto_open = False,
         filename = "NEP_TKIDs_"+save_name+"_%spW"%(optical_power)
     )
