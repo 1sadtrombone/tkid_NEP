@@ -145,19 +145,20 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
 
     epsilon = eps[np.argmin(diffs)]
     """
-
-    rms_A = np.sqrt(np.mean(A**2))
-    rms_B = np.sqrt(np.mean(B**2))
+    A_m = A[int(len(A)/10):2*int(len(A)/10)]
+    B_m = B[int(len(A)/10):2*int(len(A)/10)]
+    rms_A = np.sqrt(np.mean(A_m**2))
+    rms_B = np.sqrt(np.mean(B_m**2))
 
     resp_avg = (responsivity1 + responsivity2)/2
+    print(rms_A,rms_B)
+    print(responsivity1,responsivity2,resp_avg)
+    responsivity1 = resp_avg
+    responsivity2 = resp_avg * (rms_A/rms_B)
+    print(responsivity1,responsivity2,resp_avg)
 
-    responsivity1 = resp_avg * rms_A
-    responsivity2 = resp_avg * rms_B
-    
-    #DIFF = A*responsivity1 - B*responsivity2 * epsilon
-    #SUM = A*responsivity1 + B*responsivity2 * epsilon
-    DIFF = A*responsivity1
-    SUM = B*responsivity2
+    DIFF = A*responsivity1 - B*responsivity2
+    SUM = B*responsivity2 + A*responsivity1
 
     Frequencies, DSpec = signal.welch(DIFF, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
     Frequencies, SSpec = signal.welch(SUM, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
@@ -448,7 +449,7 @@ if __name__ == "__main__":
         calibration_filename = "/mnt/smurf-srv24"+logdata['calibration path'][5:]
         noise_filename = "/mnt/smurf-srv24"+logdata['NEP data path'][5:]
         optical_power = logdata['base_op_pW']
-        wave_power = float(logdata['wave_op_pW'])*1000 # want aW. This is peak to peak.
+        wave_power = float(logdata['wave_op_pW'])*1e6 # want aW. This is peak to peak.
     else:
         calibration_filename = args.calibration_filename
         noise_filename = args.noise_filename
@@ -464,11 +465,12 @@ if __name__ == "__main__":
         data = d_calib,
         reso1 = args.reso1,
         reso2 = args.reso2,
-        dP = 5000,#wave_power*1e3,
+        dP = wave_power,
         freq_mask = freq_mask_calib,
         plot_filename = "Calib_TKIDs_"+save_name+"_%spW"%(optical_power),
         cryocard_trace = h_calib
     )
+    print(responsivity1,responsivity2)
 
     plot_buffer(
         time = t_noise,
