@@ -396,8 +396,14 @@ if __name__ == "__main__":
     S = pysmurf.client.SmurfControl(offline=True)
     save_name = "first"
 
-    if args.log_filename:
-        with open(args.log_filename, 'r') as f:
+    if args.log_filename or not args.calibration_filename:
+        if not args.log_filename:
+            list_of_files = glob.glob('/mnt/smurf-srv24/smurf_data/tkid_logs/*.json')
+            log_fname = max(list_of_files, key=os.path.getctime)
+            print(f"Found latest log file at: {log_fname}")
+        else:
+            log_fname = args.log_filename    
+        with open(log_fname, 'r') as f:
             logdata = json.load(f)
         calibration_filename = "/mnt"+logdata['calibration path'][4:]
         noise_filename = "/mnt"+logdata['NEP data path'][4:]
