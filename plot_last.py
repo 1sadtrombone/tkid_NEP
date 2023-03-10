@@ -122,7 +122,7 @@ def plot_NEP(samples, responsivity1, responsivity2, freq_mask, reso1, reso2, sam
     #DIFF = A*responsivity1 - B*responsivity2 * epsilon
     #SUM = A*responsivity1 + B*responsivity2 * epsilon
     DIFF = A*responsivity1
-    SUM = B*responsivity2 
+    SUM = B*responsivity2
 
     Frequencies, DSpec = signal.welch(DIFF, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
     Frequencies, SSpec = signal.welch(SUM, nperseg=welch, fs=sampling_rate, detrend='linear',scaling='density')
@@ -294,7 +294,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
 
     #clipping
     clipping = 0
-    clipping_end = len(A_f)
+    clipping_end = min(len(A_f),len(A))
     # B = B[clipping:-clipping]
     # B_f = B_f[clipping:-clipping]
     # A_f = A_f [clipping:-clipping]
@@ -303,12 +303,14 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     cryocard_trace = cryocard_trace[clipping:clipping_end]
     A = A[clipping:clipping_end]
     B = B [clipping:clipping_end]
+    A_f = A_f[clipping:clipping_end]
+    B_f = B_f [clipping:clipping_end]
 
 
     # Apply correction
     A = A - A_f
     B = B - B_f
-    
+
     # decimate to reduce noise, allowing us to treat the up and down as two separate distributions
     A_d = signal.decimate(A, 10, ftype='fir')
     B_d = signal.decimate(B, 10, ftype='fir')
@@ -324,7 +326,7 @@ def calculate_responsivity(time_ax, data, reso1, reso2, freq_mask, plot_filename
     resp_A_std = dP/df_std_A
     resp_B = dP/df_B
     resp_B_std = dP/df_std_B
-    
+
     print("Plotting...")
     fig = plotly.subplots.make_subplots(
         rows=1, cols=1,
@@ -391,26 +393,23 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.optical_power is None:
-        print("--optical_power is required" )
-        exit()
-
     S = pysmurf.client.SmurfControl(offline=True)
-    
+    save_name = "first"
 
     if args.log_filename:
         with open(args.log_filename, 'r') as f:
             logdata = json.load(f)
-        calibration_filename = logdata['calibration path']
-        noise_filename = logdata['NEP data path']
+        calibration_filename = "/mnt"+logdata['calibration path'][4:]
+        noise_filename = "/mnt"+logdata['NEP data path'][4:]
         optical_power = logdata['base_op_pW']
-        wave_power = logdata['wave_op_pW']*1000 # want aW. This is peak to peak.
+        wave_power = float(logdata['wave_op_pW'])*1000 # want aW. This is peak to peak.
     else:
         calibration_filename = args.calibration_filename
         noise_filename = args.noise_filename
         optical_power = args.optical_power
         wave_power = args.wave_power
-
+    print("Getting calibration data from %s" % (calibration_filename))
+    print("Getting noise data from %s" % (noise_filename))
     t_calib,d_calib,m_calib,h_calib,freq_mask_calib = get_data(calibration_filename)
     t_noise,d_noise,m_noise,h_noise,freq_mask_noise = get_data(noise_filename)
 
@@ -419,13 +418,13 @@ if __name__ == "__main__":
         data = d_calib,
         reso1 = args.reso1,
         reso2 = args.reso2,
-        dP = 3000,
+        dP = wave_power,
         freq_mask = freq_mask_calib,
-        plot_filename = "Calib_TKIDs_"+save_name_calib+"_%.1fpW"%(args.optical_power),
+        plot_filename = "Calib_TKIDs_"+save_name+"_%spW"%(optical_power),
         cryocard_trace = h_calib
     )
 
-    save_name = "first"
+
 
     plot_NEP(
         samples = d_noise,
@@ -437,5 +436,5 @@ if __name__ == "__main__":
         sampling_rate=args.sampling_rate,
         welch=10,
         auto_open = False,
-        filename = "NEP_TKIDs_"+save_name+"_%.1fpW"%(args.optical_power)
+        filename = "NEP_TKIDs_"+save_name+"_%spW"%(optical_power)
     )
